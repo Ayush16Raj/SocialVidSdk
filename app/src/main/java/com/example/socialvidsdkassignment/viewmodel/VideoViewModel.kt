@@ -1,5 +1,10 @@
 package com.example.socialvidsdkassignment.viewmodel
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.socialvidsdkassignment.ApiState
@@ -13,13 +18,12 @@ import javax.inject.Inject
 
 @HiltViewModel
 class VideoViewModel
-@Inject
-constructor(private val videoRepository: VideoRepository): ViewModel() {
+@Inject constructor(private val videoRepository: VideoRepository) : ViewModel() {
     private val _response: MutableStateFlow<ApiState> = MutableStateFlow(ApiState.Empty)
     val response = _response
 
     init {
-       getVideo()
+        getVideo()
     }
 
     private fun getVideo() = viewModelScope.launch {
@@ -32,5 +36,4 @@ constructor(private val videoRepository: VideoRepository): ViewModel() {
                 _response.value = ApiState.Success(it)
             }
     }
-
 }
