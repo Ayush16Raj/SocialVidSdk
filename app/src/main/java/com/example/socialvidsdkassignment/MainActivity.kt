@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -40,17 +41,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.ImageLoader
 import coil.compose.rememberAsyncImagePainter
@@ -121,7 +124,9 @@ fun Swipe(apiState: ApiState) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         val context = LocalContext.current
-        VerticalPager(state = pagerState) {
+        VerticalPager(state = pagerState, key = {
+            msgList?.get(it)?._id ?: -1                 // after using key video overlapping problem solved
+        }) {index ->
             when (apiState) {
                 is ApiState.Loading -> {
                     // Display loading indicator
@@ -132,8 +137,8 @@ fun Swipe(apiState: ApiState) {
 
                 is ApiState.Success -> {
                     // Display the videos fetched from the API
-                    if (msgList != null && it < msgList.size) {
-                        VideoPlayer(msg = msgList[it])
+                    if (msgList != null && index < msgList.size && index == pagerState.currentPage ) {
+                        VideoPlayer(msg = msgList[index],pagerState = pagerState)
                     }
 
                 }
@@ -141,7 +146,7 @@ fun Swipe(apiState: ApiState) {
                 is ApiState.Failure -> {
                     // Display error message
                     val errorMessage = apiState.msg.message!!
-                    
+
                     Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
                 }
 
@@ -155,10 +160,10 @@ fun Swipe(apiState: ApiState) {
 }
 
 
-@Composable
-fun VideoPlayer(msg: Msg?) {
+@androidx.annotation.OptIn(UnstableApi::class) @Composable
+fun VideoPlayer(msg: Msg?,pagerState: PagerState) {
     Column(modifier = Modifier.fillMaxSize()) {
-
+      val lifecycleOwner = LocalLifecycleOwner.current
         if (msg != null) {
             val context = LocalContext.current
             val player = remember(context) {
@@ -176,28 +181,50 @@ fun VideoPlayer(msg: Msg?) {
                 val uri = videoUrl.toUri()
                 val mediaItem = MediaItem.fromUri(uri)
 
+                // Clear existing media items
+                player.clearMediaItems()
+
                 player.setMediaItem(mediaItem)
+                playerView.useController = false // hide controller
 
                 player.addListener(object : Player.Listener {
                     override fun onIsLoadingChanged(isLoading: Boolean) {
                         super.onIsLoadingChanged(isLoading)
                         isPreparing = isLoading // Update the state when the loading status changes
                     }
+
+                    override fun onPlaybackStateChanged(state: Int) {
+                        super.onPlaybackStateChanged(state)
+                        if (state == Player.STATE_READY && pagerState.currentPage == pagerState.targetPage) {
+                            // Start playback when the media is ready and video is visible
+                            player.playWhenReady = true
+                        }
+                    }
                 })
+                val observer = LifecycleEventObserver { _, event ->  // to stop exoplayer playing in background
+                    if (event == Lifecycle.Event.ON_PAUSE) {
+                       player.pause()
+                    } else if (event == Lifecycle.Event.ON_STOP) {
+                        player.stop()
+                    }
+                }
+
+                // Add the observer to the lifecycle
+                lifecycleOwner.lifecycle.addObserver(observer)
 
                 player.prepare()
-                player.play()
-                player.repeatMode = Player.REPEAT_MODE_ONE
-                playerView.useController = false
+                player.repeatMode = Player.REPEAT_MODE_ONE // loop video until scroll
+                playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM // to make video full screen
 
                 onDispose {
                     player.release()
+                    lifecycleOwner.lifecycle.removeObserver(observer)
                 }
             }
 
             Box(modifier = Modifier.fillMaxSize(), Alignment.Center) {
                 if (isPreparing) {
-                    CircularProgressIndicator() // Display the progress indicator while preparing
+                    CircularProgressIndicator() //progress indicator while preparing
                 } else {
                     PlayerViewComponent(playerView = playerView)
                     Column(
@@ -217,7 +244,8 @@ fun VideoPlayer(msg: Msg?) {
 
 @Composable
 fun PlayerViewComponent(playerView: PlayerView) {
-    AndroidView(factory = { playerView })
+    AndroidView(factory = { playerView },
+        modifier = Modifier.fillMaxSize())
 }
 
 @Composable
@@ -248,7 +276,8 @@ fun CreatorInfo(msg: Msg?,context: Context) {
             Text(
                 text = msg?.user_info?.username ?: "",
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = Color.White
             )
 
         }
@@ -257,6 +286,7 @@ fun CreatorInfo(msg: Msg?,context: Context) {
             Text(
                 text = it.first_name,
                 fontSize = 16.sp,
+                color = Color.White
             )
         }
         // caption

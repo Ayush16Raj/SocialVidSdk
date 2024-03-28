@@ -1,10 +1,5 @@
 package com.example.socialvidsdkassignment.viewmodel
 
-import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.os.Build
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.socialvidsdkassignment.ApiState
