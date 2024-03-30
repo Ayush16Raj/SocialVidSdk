@@ -17,6 +17,7 @@ class VideoViewModel
     private val _response: MutableStateFlow<ApiState> = MutableStateFlow(ApiState.Empty)
     val response = _response
 
+
     init {
         getVideo()
     }

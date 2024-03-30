@@ -52,7 +52,15 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.database.StandaloneDatabaseProvider
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.ImageLoader
@@ -61,13 +69,20 @@ import com.example.socialvidsdkassignment.model.Msg
 import com.example.socialvidsdkassignment.ui.theme.SocialVidSdkAssignmentTheme
 import com.example.socialvidsdkassignment.viewmodel.VideoViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import java.io.File
 
-@AndroidEntryPoint
+@UnstableApi @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val videoViewModel: VideoViewModel by viewModels()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+//         val exoPlayerCacheSize: Long = 90 * 1024 * 1024L // max bytes
+//         val cacheDir = File(this.cacheDir, "exoplayer-cache")
+//         val simpleCache = SimpleCache(
+//            cacheDir,
+//            LeastRecentlyUsedCacheEvictor(exoPlayerCacheSize),
+//            StandaloneDatabaseProvider(this)
+//        )
         setContent {
             SocialVidSdkAssignmentTheme {
                 Surface(
@@ -164,6 +179,11 @@ fun Swipe(apiState: ApiState) {
 fun VideoPlayer(msg: Msg?,pagerState: PagerState) {
     Column(modifier = Modifier.fillMaxSize()) {
       val lifecycleOwner = LocalLifecycleOwner.current
+
+//        val cacheDataSourceFactory  =
+//            CacheDataSource.Factory()
+//                .setCache(simpleCache)
+//                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         if (msg != null) {
             val context = LocalContext.current
             val player = remember(context) {
@@ -183,8 +203,11 @@ fun VideoPlayer(msg: Msg?,pagerState: PagerState) {
 
                 // Clear existing media items
                 player.clearMediaItems()
-
                 player.setMediaItem(mediaItem)
+
+//                val mediaSource: MediaSource = ProgressiveMediaSource.Factory(cacheDataSourceFactory)
+//                    .createMediaSource(mediaItem)
+
                 playerView.useController = false // hide controller
 
                 player.addListener(object : Player.Listener {
@@ -203,9 +226,15 @@ fun VideoPlayer(msg: Msg?,pagerState: PagerState) {
                 })
                 val observer = LifecycleEventObserver { _, event ->  // to stop exoplayer playing in background
                     if (event == Lifecycle.Event.ON_PAUSE) {
-                       player.pause()
+                        player.playWhenReady = false // Pause playback when the activity is paused
                     } else if (event == Lifecycle.Event.ON_STOP) {
                         player.stop()
+                    } else if(event == Lifecycle.Event.ON_START){
+                        player.prepare()
+                    } else if(event == Lifecycle.Event.ON_RESUME){
+                        player.playWhenReady = true
+                    }else if(event == Lifecycle.Event.ON_DESTROY){
+                        player.release()
                     }
                 }
 
@@ -218,6 +247,7 @@ fun VideoPlayer(msg: Msg?,pagerState: PagerState) {
 
                 onDispose {
                     player.release()
+//                    simpleCache.release()
                     lifecycleOwner.lifecycle.removeObserver(observer)
                 }
             }
